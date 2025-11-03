@@ -1,26 +1,33 @@
 import SwiftUI
 
 struct TaskListView: View {
-    @Binding var tasks: [Task]
-    var onToggle: (Task) -> Void
+    @ObservedObject var viewModel: TaskViewModel
     
     var body: some View {
-        List {
-            ForEach(tasks) { task in
-                HStack {
-                    Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(task.isDone ? .green : .gray)
-                        .onTapGesture {
-                            onToggle(task)
-                        }
-                    Text(task.title)
-                        .strikethrough(task.isDone, color: .gray)
-                        .foregroundColor(task.isDone ? .gray : .primary)
+        VStack(alignment: .leading, spacing: 8) {
+            if viewModel.incompleteTasks.isEmpty {
+                Text("今日のタスクはありません")
+                    .foregroundColor(.gray)
+                    .padding(.horizontal)
+            } else {
+                Text("今日のタスク")
+                    .font(.title2.bold())
+                    .padding(.horizontal)
+                ForEach(viewModel.incompleteTasks) { task in
+                    TaskRowView(task: task, toggleTask: viewModel.toggleTask, startTimer: viewModel.startTimer)
                 }
-                .padding(.vertical, 4)
+            }
+            
+            Divider().padding(.horizontal)
+            
+            if !viewModel.completedTasks.isEmpty {
+                Text("完了済み")
+                    .font(.title2.bold())
+                    .padding(.horizontal)
+                ForEach(viewModel.completedTasks) { task in
+                    TaskRowView(task: task, toggleTask: viewModel.toggleTask, startTimer: viewModel.startTimer, isCompleted: true)
+                }
             }
         }
-        .listStyle(.plain)
-        .navigationTitle("今日のタスク")
     }
 }
