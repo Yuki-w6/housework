@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		FACCE2382EB8D9E300496373 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = FACCE2372EB8D9DC00496373 /* .gitignore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		FA4084E42EB8669E00689731 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +31,7 @@
 		FA4084D32EB8669700689731 /* housework.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = housework.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FA4084E32EB8669E00689731 /* houseworkTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = houseworkTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FA4084ED2EB8669E00689731 /* houseworkUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = houseworkUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		FACCE2372EB8D9DC00496373 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -75,6 +80,7 @@
 		FA4084CA2EB8669700689731 = {
 			isa = PBXGroup;
 			children = (
+				FACCE2372EB8D9DC00496373 /* .gitignore */,
 				FA4084D52EB8669700689731 /* housework */,
 				FA4084E62EB8669E00689731 /* houseworkTests */,
 				FA4084F02EB8669E00689731 /* houseworkUITests */,
@@ -212,6 +218,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FACCE2382EB8D9E300496373 /* .gitignore in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
