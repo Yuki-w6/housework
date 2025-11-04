@@ -4,28 +4,30 @@ struct TaskListView: View {
     @ObservedObject var viewModel: TaskViewModel
     
     var body: some View {
+        let vm = viewModel // 👈 同様にローカル変数でバグ回避
+        
         VStack(alignment: .leading, spacing: 8) {
-            if viewModel.incompleteTasks.isEmpty {
+            if vm.incompleteTasks.isEmpty {
                 Text("今日のタスクはありません")
                     .foregroundColor(.gray)
                     .padding(.horizontal)
             } else {
-                Text("今日のタスク")
+                Text("タスク")
                     .font(.title2.bold())
                     .padding(.horizontal)
-                ForEach(viewModel.incompleteTasks) { task in
-                    TaskRowView(task: task, toggleTask: viewModel.toggleTask, startTimer: viewModel.startTimer)
+                ForEach(vm.incompleteTasks) { task in
+                    TaskRowView(viewModel: vm, task: task, isCompleted: false)
                 }
             }
             
             Divider().padding(.horizontal)
             
-            if !viewModel.completedTasks.isEmpty {
+            if !vm.completedTasks.isEmpty {
                 Text("完了済み")
                     .font(.title2.bold())
                     .padding(.horizontal)
-                ForEach(viewModel.completedTasks) { task in
-                    TaskRowView(task: task, toggleTask: viewModel.toggleTask, startTimer: viewModel.startTimer, isCompleted: true)
+                ForEach(vm.completedTasks) { task in
+                    TaskRowView(viewModel: vm, task: task, isCompleted: true)
                 }
             }
         }
