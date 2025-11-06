@@ -3,61 +3,94 @@ import Combine
 
 final class TaskViewModel: ObservableObject {
     @Published var tasks: [Task] = [] {
-        didSet {
-            saveTasks() // ✅ 変更があれば自動保存
-        }
+        didSet { saveTasks() }
     }
     @Published var newTaskTitle = ""
     @Published var selectedDuration: Int = 30
+    @Published var currentTaskID: UUID? = nil
     
-    private var timers: [UUID: AnyCancellable] = [:]
-    private let saveKey = "savedTasks" // UserDefaultsのキー名
+    private var timer: Timer?
+    private let saveKey = "savedTasks"
     
     init() {
         loadTasks()
     }
     
-    var incompleteTasks: [Task] {
-        tasks.filter { !$0.isDone }
-    }
-    
-    var completedTasks: [Task] {
-        tasks.filter { $0.isDone }
-    }
-    
-    // MARK: - 追加
+    // MARK: - 追加・更新・削除
     func addTask() {
         guard !newTaskTitle.isEmpty else { return }
-        let newTask = Task(
-            title: newTaskTitle,
-            isDone: false,
-            plannedMinutes: selectedDuration
-        )
+        let newTask = Task(title: newTaskTitle, plannedMinutes: selectedDuration)
         tasks.append(newTask)
         newTaskTitle = ""
     }
     
-    // MARK: - 更新
     func updateTask(_ updatedTask: Task) {
         if let index = tasks.firstIndex(where: { $0.id == updatedTask.id }) {
             tasks[index] = updatedTask
         }
     }
     
-    // MARK: - 削除
     func deleteTask(_ task: Task) {
-        stopTimer(for: task)
+        stopGlobalTimer()
         tasks.removeAll { $0.id == task.id }
     }
     
-    // MARK: - タスク状態操作
+    // MARK: - 状態フィルタ
+    var incompleteTasks: [Task] { tasks.filter { !$0.isDone } }
+    var completedTasks: [Task] { tasks.filter { $0.isDone } }
+    
     func toggleTask(_ task: Task) {
-        if let index = tasks.firstIndex(of: task) {
-            tasks[index].isDone.toggle()
-            stopTimer(for: tasks[index])
+        guard let index = tasks.firstIndex(of: task) else { return }
+        tasks[index].isDone.toggle()
+        
+        if tasks[index].isDone {
+            // 完了したら実行時間リセット
+            tasks[index].executedSeconds = 0
+            tasks[index].isRunning = false
+            if currentTaskID == task.id {
+                stopGlobalTimer()
+            }
+        } else {
+            // 未完了に戻したら停止状態で再開可
+            tasks[index].isRunning = false
         }
     }
     
+    // MARK: - タスク切り替え制御
+    func startGlobalTimer(for task: Task) {
+        if let runningID = currentTaskID,
+           let oldIndex = tasks.firstIndex(where: { $0.id == runningID }),
+           runningID != task.id {
+            // 前のタスクを完了状態にせず、停止状態へ
+            tasks[oldIndex].isRunning = false
+        }
+        
+        guard let index = tasks.firstIndex(of: task) else { return }
+        currentTaskID = task.id
+        tasks[index].isRunning = true
+        
+        if timer == nil {
+            timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                guard let self = self, let runningID = self.currentTaskID,
+                      let idx = self.tasks.firstIndex(where: { $0.id == runningID }) else { return }
+                self.tasks[idx].executedSeconds += 1
+            }
+        }
+    }
+    
+    func stopGlobalTimer() {
+        timer?.invalidate()
+        timer = nil
+        
+        // 実行中タスクを停止状態にする
+        if let runningID = currentTaskID,
+           let idx = tasks.firstIndex(where: { $0.id == runningID }) {
+            tasks[idx].isRunning = false
+        }
+        currentTaskID = nil
+    }
+    
+    // MARK: - Binding 取得
     func binding(for task: Task) -> Binding<Task>? {
         guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return nil }
         return Binding(
@@ -66,43 +99,18 @@ final class TaskViewModel: ObservableObject {
         )
     }
     
-    // MARK: - タイマー制御
-    func startOrStopTimer(_ task: Task) {
+    func completeTask(_ task: Task) {
         guard let index = tasks.firstIndex(of: task) else { return }
-        if tasks[index].isRunning {
-            stopTimer(for: tasks[index])
-        } else {
-            startTimer(for: tasks[index])
-        }
+        tasks[index].isDone = true
+        tasks[index].executedSeconds = 0
+        stopGlobalTimer()
     }
     
-    private func startTimer(for task: Task) {
-        guard let index = tasks.firstIndex(of: task) else { return }
-        tasks[index].isRunning = true
-        
-        timers[task.id] = Timer.publish(every: 1, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in
-                guard let self = self else { return }
-                if let idx = self.tasks.firstIndex(of: task), self.tasks[idx].isRunning {
-                    self.tasks[idx].executedSeconds += 1
-                }
-            }
-    }
-    
-    private func stopTimer(for task: Task) {
-        guard let index = tasks.firstIndex(of: task) else { return }
-        tasks[index].isRunning = false
-        timers[task.id]?.cancel()
-        timers[task.id] = nil
-    }
-    
-    // MARK: - 合計時間
+    // MARK: - 表示用集計
     var totalPlannedTime: String {
         let totalMinutes = tasks.map(\.plannedMinutes).reduce(0, +)
         return formatMinutes(totalMinutes)
     }
-    
     var totalExecutedTime: String {
         let totalSeconds = tasks.map(\.executedSeconds).reduce(0, +)
         let totalMinutes = totalSeconds / 60
@@ -110,27 +118,26 @@ final class TaskViewModel: ObservableObject {
     }
     
     private func formatMinutes(_ minutes: Int) -> String {
-        let hours = minutes / 60
-        let mins = minutes % 60
-        return String(format: "%02d:%02d", hours, mins)
+        let h = minutes / 60
+        let m = minutes % 60
+        return String(format: "%02d:%02d", h, m)
     }
     
-    // MARK: - 永続化処理
+    // MARK: - 永続化
     private func saveTasks() {
         do {
             let data = try JSONEncoder().encode(tasks)
             UserDefaults.standard.set(data, forKey: saveKey)
         } catch {
-            print("❌ タスクの保存に失敗: \(error)")
+            print("保存失敗: \(error)")
         }
     }
-    
     private func loadTasks() {
         guard let data = UserDefaults.standard.data(forKey: saveKey) else { return }
         do {
             tasks = try JSONDecoder().decode([Task].self, from: data)
         } catch {
-            print("❌ タスクの読み込みに失敗: \(error)")
+            print("読み込み失敗: \(error)")
         }
     }
 }

@@ -4,7 +4,7 @@ struct TaskListView: View {
     @ObservedObject var viewModel: TaskViewModel
     
     var body: some View {
-        let vm = viewModel // 👈 同様にローカル変数でバグ回避
+        let vm = viewModel
         
         VStack(alignment: .leading, spacing: 8) {
             if vm.incompleteTasks.isEmpty {

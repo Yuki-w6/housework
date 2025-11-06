@@ -9,7 +9,7 @@ struct TaskEditView: View {
     var body: some View {
         NavigationView {
             Form {
-                // ✅ セクション1: チェック＋タイトル
+                // チェック＋タイトル
                 Section {
                     HStack {
                         Button(action: { task.isDone.toggle() }) {
@@ -22,7 +22,7 @@ struct TaskEditView: View {
                     }
                 }
                 
-                // ✅ セクション2: 予定時間 / リマインダー / 繰り返し
+                // 予定時間 / リマインダー / 繰り返し
                 Section(header: Text("設定")) {
                     HStack {
                         Text("予定時間")
@@ -44,7 +44,7 @@ struct TaskEditView: View {
                     }
                 }
                 
-                // ✅ セクション3: メモ
+                // メモ
                 Section(header: Text("メモ")) {
                     TextEditor(text: $task.memo)
                         .frame(minHeight: 120)
