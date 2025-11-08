@@ -6,10 +6,8 @@ struct SummaryView: View {
     var body: some View {
         let vm = viewModel
         
-        // 背景付きカードレイアウト
         VStack(alignment: .leading, spacing: 16) {
-            
-            // 各項目をカードっぽく並べる
+            // カード全体（背景含む）
             HStack(spacing: 12) {
                 summaryItem(title: "予定時間", value: vm.totalPlannedTime)
                 summaryItem(title: "予定タスク数", value: "\(vm.incompleteTasks.count)")
@@ -19,11 +17,13 @@ struct SummaryView: View {
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(.systemGray6))
+                    .fill(Color.appCard) // ✅ カード色（ダークモード対応）
+                    .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
             )
             .padding(.horizontal)
         }
         .padding(.vertical, 8)
+        .background(Color.appBackground.ignoresSafeArea()) // ✅ 背景色
     }
     
     private func summaryItem(title: String, value: String) -> some View {
@@ -31,11 +31,18 @@ struct SummaryView: View {
             Text(title)
                 .font(.caption)
                 .foregroundColor(.gray)
+            
             Text(value)
-                .font(.system(size: 22, weight: .bold, design: .rounded)) // フォントを大きく
-                .foregroundColor(.primary)
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .foregroundColor(Color.appText) // ✅ テキストカラー（モード対応）
         }
-        .frame(maxWidth: .infinity) // 均等幅配置
+        .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
+    }
+}
+
+#Preview {
+    Group {
+        SummaryView(viewModel: TaskViewModel())
     }
 }

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct CountView: View {
-    @Binding var task: Task
+    @Binding var task: HWTask
     @ObservedObject var viewModel: TaskViewModel
     @Environment(\.dismiss) private var dismiss
     

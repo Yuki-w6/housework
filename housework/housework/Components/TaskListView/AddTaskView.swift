@@ -8,7 +8,7 @@ struct AddTaskView: View {
     private let durationOptions: [Int] = stride(from: 5, through: 120, by: 5).map { $0 }
     
     var body: some View {
-        HStack {
+        HStack(spacing: 8) {
             Image(systemName: "plus.circle.fill")
                 .foregroundColor(.blue)
                 .font(.title3)
@@ -20,7 +20,6 @@ struct AddTaskView: View {
                     viewModel.addTask()
                 }
                 .submitLabel(.done)
-            // キーボード上に時間選択バーを表示
                 .toolbar {
                     ToolbarItemGroup(placement: .keyboard) {
                         ScrollView(.horizontal, showsIndicators: false) {
@@ -31,12 +30,13 @@ struct AddTaskView: View {
                                     }) {
                                         Text("\(minutes)分")
                                             .font(.caption)
+                                            .foregroundColor(Color.appText)
                                             .padding(.vertical, 6)
                                             .padding(.horizontal, 10)
                                             .background(
                                                 viewModel.selectedDuration == minutes
-                                                ? Color.blue.opacity(0.25)
-                                                : Color(.systemGray5)
+                                                ? Color.blue.opacity(0.3)
+                                                : Color(UIColor.systemGray5)
                                             )
                                             .cornerRadius(8)
                                     }
@@ -48,8 +48,19 @@ struct AddTaskView: View {
                 }
         }
         .padding()
-        .background(Color(.systemGray6))
+        .background(Color.appCard) // ✅ カード色（ライト/ダーク対応）
         .cornerRadius(12)
         .padding(.horizontal)
+        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+    }
+}
+
+#Preview {
+    Group {
+        VStack {
+            AddTaskView(viewModel: TaskViewModel())
+            Spacer()
+        }
+        .background(Color.appBackground)
     }
 }

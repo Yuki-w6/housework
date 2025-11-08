@@ -1,14 +1,11 @@
-//
-//  houseworkApp.swift
-//  housework
-//
-//  Created by 間山友喜 on 2025/11/03.
-//
-
 import SwiftUI
 
 @main
 struct houseworkApp: App {
+    init() {
+        NotificationManager.shared.requestPermission() // ← 通知許可リクエスト
+    }
+    
     var body: some Scene {
         WindowGroup {
             ContentView()

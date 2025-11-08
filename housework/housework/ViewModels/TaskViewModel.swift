@@ -2,7 +2,7 @@ import SwiftUI
 import Combine
 
 final class TaskViewModel: ObservableObject {
-    @Published var tasks: [Task] = [] {
+    @Published var tasks: [HWTask] = [] {
         didSet { saveTasks() }
     }
     @Published var newTaskTitle = ""
@@ -16,30 +16,48 @@ final class TaskViewModel: ObservableObject {
         loadTasks()
     }
     
-    // MARK: - 追加・更新・削除
+    // 追加・更新・削除
     func addTask() {
         guard !newTaskTitle.isEmpty else { return }
-        let newTask = Task(title: newTaskTitle, plannedMinutes: selectedDuration)
+        let newTask = HWTask(
+            title: newTaskTitle,
+            isDone: false,
+            plannedMinutes: selectedDuration
+        )
         tasks.append(newTask)
         newTaskTitle = ""
-    }
-    
-    func updateTask(_ updatedTask: Task) {
-        if let index = tasks.firstIndex(where: { $0.id == updatedTask.id }) {
-            tasks[index] = updatedTask
+        saveTasks()
+        
+        // 通知登録（リマインダーがある場合）
+        if newTask.reminderDate != nil {
+            NotificationManager.shared.scheduleNotification(for: newTask)
         }
     }
     
-    func deleteTask(_ task: Task) {
-        stopGlobalTimer()
-        tasks.removeAll { $0.id == task.id }
+    func updateTask(_ updatedTask: HWTask) {
+        if let index = tasks.firstIndex(where: { $0.id == updatedTask.id }) {
+            tasks[index] = updatedTask
+            saveTasks()
+            
+            NotificationManager.shared.cancelNotification(for: updatedTask)
+            if updatedTask.reminderDate != nil {
+                NotificationManager.shared.scheduleNotification(for: updatedTask)
+            }
+        }
     }
     
-    // MARK: - 状態フィルタ
-    var incompleteTasks: [Task] { tasks.filter { !$0.isDone } }
-    var completedTasks: [Task] { tasks.filter { $0.isDone } }
+    func deleteTask(_ task: HWTask) {
+        stopGlobalTimer()
+        NotificationManager.shared.cancelNotification(for: task)
+        tasks.removeAll { $0.id == task.id }
+        saveTasks()
+    }
     
-    func toggleTask(_ task: Task) {
+    // 状態フィルタ
+    var incompleteTasks: [HWTask] { tasks.filter { !$0.isDone } }
+    var completedTasks: [HWTask] { tasks.filter { $0.isDone } }
+    
+    func toggleTask(_ task: HWTask) {
         guard let index = tasks.firstIndex(of: task) else { return }
         tasks[index].isDone.toggle()
         
@@ -47,17 +65,18 @@ final class TaskViewModel: ObservableObject {
             // 完了したら実行時間リセット
             tasks[index].executedSeconds = 0
             tasks[index].isRunning = false
+            tasks[index].completedAt = Date()
             if currentTaskID == task.id {
                 stopGlobalTimer()
             }
         } else {
-            // 未完了に戻したら停止状態で再開可
+            tasks[index].completedAt = nil
             tasks[index].isRunning = false
         }
     }
     
     // MARK: - タスク切り替え制御
-    func startGlobalTimer(for task: Task) {
+    func startGlobalTimer(for task: HWTask) {
         if let runningID = currentTaskID,
            let oldIndex = tasks.firstIndex(where: { $0.id == runningID }),
            runningID != task.id {
@@ -91,7 +110,7 @@ final class TaskViewModel: ObservableObject {
     }
     
     // MARK: - Binding 取得
-    func binding(for task: Task) -> Binding<Task>? {
+    func binding(for task: HWTask) -> Binding<HWTask>? {
         guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return nil }
         return Binding(
             get: { self.tasks[index] },
@@ -99,7 +118,7 @@ final class TaskViewModel: ObservableObject {
         )
     }
     
-    func completeTask(_ task: Task) {
+    func completeTask(_ task: HWTask) {
         guard let index = tasks.firstIndex(of: task) else { return }
         tasks[index].isDone = true
         tasks[index].executedSeconds = 0
@@ -108,11 +127,11 @@ final class TaskViewModel: ObservableObject {
     
     // MARK: - 表示用集計
     var totalPlannedTime: String {
-        let totalMinutes = tasks.map(\.plannedMinutes).reduce(0, +)
+        let totalMinutes = (incompleteTodayTasks + completedTodayTasks).map(\.plannedMinutes).reduce(0, +)
         return formatMinutes(totalMinutes)
     }
     var totalExecutedTime: String {
-        let totalSeconds = tasks.map(\.executedSeconds).reduce(0, +)
+        let totalSeconds = (incompleteTodayTasks + completedTodayTasks).map(\.executedSeconds).reduce(0, +)
         let totalMinutes = totalSeconds / 60
         return formatMinutes(totalMinutes)
     }
@@ -135,9 +154,54 @@ final class TaskViewModel: ObservableObject {
     private func loadTasks() {
         guard let data = UserDefaults.standard.data(forKey: saveKey) else { return }
         do {
-            tasks = try JSONDecoder().decode([Task].self, from: data)
+            tasks = try JSONDecoder().decode([HWTask].self, from: data)
         } catch {
             print("読み込み失敗: \(error)")
         }
     }
+    
+    private var todayWeekdaySymbol: String {
+        // 「日,月,火,水,木,金,土」のどれかに合わせる
+        let map = ["日","月","火","水","木","金","土"]
+        let w = Calendar.current.component(.weekday, from: Date()) // 1=Sun ... 7=Sat
+        return map[(w - 1) % 7]
+    }
+    
+    private func isRepeatActiveToday(_ task: HWTask) -> Bool {
+        // 繰り返し設定があり、今日の曜日が含まれるか
+        guard !task.repeatDays.isEmpty else { return false }
+        return task.repeatDays.contains(todayWeekdaySymbol)
+    }
+    
+    private func isCompletedToday(_ task: HWTask) -> Bool {
+        guard let completed = task.completedAt else { return false }
+        return Calendar.current.isDateInToday(completed)
+    }
+    
+    private func isTargetForToday(_ task: HWTask) -> Bool {
+        // ① 繰り返し：今日の曜日に該当する → 今日の対象
+        // ② 単発：未完了のものだけが対象（完了済みは翌日以降は出さない）
+        if isRepeatActiveToday(task) { return true }
+        return !task.isDone
+    }
+    
+    // ✅ 今日の未完了
+    var incompleteTodayTasks: [HWTask] {
+        tasks.filter { task in
+            if isRepeatActiveToday(task) {
+                // 繰り返し：今日分が未完なら表示
+                return !isCompletedToday(task)
+            } else {
+                // 単発：未完のものだけ表示（完了したら翌日以降は出さない）
+                return !task.isDone
+            }
+        }
+    }
+    
+    // ✅ 今日の完了（繰り返しは “今日分を完了したもの” だけ）
+    var completedTodayTasks: [HWTask] {
+        // ✅ 今日完了したタスクは表示（繰り返し/単発どちらも）
+        tasks.filter { isCompletedToday($0) }
+    }
+
 }
