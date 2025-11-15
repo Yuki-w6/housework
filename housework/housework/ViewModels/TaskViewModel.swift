@@ -7,13 +7,23 @@ final class TaskViewModel: ObservableObject {
     }
     @Published var newTaskTitle = ""
     @Published var selectedDuration: Int = 30
-    @Published var currentTaskID: UUID? = nil
     
-    private var timer: Timer?
+    let timerViewModel: TimerViewModel
+
     private let saveKey = "savedTasks"
     
-    init() {
+    init(timerViewModel: TimerViewModel = TimerViewModel()) {
+        self.timerViewModel = timerViewModel
         loadTasks()
+        setupTimerBinding()
+    }
+    
+    private func setupTimerBinding() {
+        timerViewModel.tickHandler = { [weak self] taskID in
+            guard let self = self,
+                  let idx = self.tasks.firstIndex(where: { $0.id == taskID }) else { return }
+            self.tasks[idx].executedSeconds += 1
+        }
     }
     
     // 追加・更新・削除
@@ -47,7 +57,9 @@ final class TaskViewModel: ObservableObject {
     }
     
     func deleteTask(_ task: HWTask) {
-        stopGlobalTimer()
+        if timerViewModel.currentTaskID == task.id {
+            stopGlobalTimer()
+        }
         NotificationManager.shared.cancelNotification(for: task)
         tasks.removeAll { $0.id == task.id }
         saveTasks()
@@ -66,7 +78,9 @@ final class TaskViewModel: ObservableObject {
             tasks[index].executedSeconds = 0
             tasks[index].isRunning = false
             tasks[index].completedAt = Date()
-            if currentTaskID == task.id {
+            
+            // 完了タスクとタイマーが紐づいていたら停止
+            if timerViewModel.currentTaskID == task.id {
                 stopGlobalTimer()
             }
         } else {
@@ -74,40 +88,41 @@ final class TaskViewModel: ObservableObject {
             tasks[index].isRunning = false
         }
     }
+
     
     // MARK: - タスク切り替え制御
     func startGlobalTimer(for task: HWTask) {
-        if let runningID = currentTaskID,
+        // すでに他のタスクが走っていたら isRunning を OFF にする
+        if let runningID = timerViewModel.currentTaskID,
            let oldIndex = tasks.firstIndex(where: { $0.id == runningID }),
            runningID != task.id {
-            // 前のタスクを完了状態にせず、停止状態へ
             tasks[oldIndex].isRunning = false
         }
         
         guard let index = tasks.firstIndex(of: task) else { return }
-        currentTaskID = task.id
+        
+        // このタスクを実行中にマーク
         tasks[index].isRunning = true
         
-        if timer == nil {
-            timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-                guard let self = self, let runningID = self.currentTaskID,
-                      let idx = self.tasks.firstIndex(where: { $0.id == runningID }) else { return }
-                self.tasks[idx].executedSeconds += 1
-            }
+        // ※ タイマー自体は TimerViewModel が持っている
+        //    -> すでに動いていれば「紐づけの変更」、止まっていれば「開始」
+        if timerViewModel.isRunning {
+            timerViewModel.changeTask(to: task.id)
+        } else {
+            timerViewModel.start(for: task.id)
         }
     }
     
     func stopGlobalTimer() {
-        timer?.invalidate()
-        timer = nil
-        
-        // 実行中タスクを停止状態にする
-        if let runningID = currentTaskID,
+        // 実行中タスク（タイマーが紐づいているタスク）があれば isRunning を OFF にする
+        if let runningID = timerViewModel.currentTaskID,
            let idx = tasks.firstIndex(where: { $0.id == runningID }) {
             tasks[idx].isRunning = false
         }
-        currentTaskID = nil
+        
+        timerViewModel.stop()
     }
+
     
     // MARK: - Binding 取得
     func binding(for task: HWTask) -> Binding<HWTask>? {
@@ -122,8 +137,14 @@ final class TaskViewModel: ObservableObject {
         guard let index = tasks.firstIndex(of: task) else { return }
         tasks[index].isDone = true
         tasks[index].executedSeconds = 0
-        stopGlobalTimer()
+        tasks[index].isRunning = false
+        tasks[index].completedAt = Date()
+        
+        if timerViewModel.currentTaskID == task.id {
+            stopGlobalTimer()
+        }
     }
+
     
     // MARK: - 表示用集計
     var totalPlannedTime: String {
@@ -185,7 +206,7 @@ final class TaskViewModel: ObservableObject {
         return !task.isDone
     }
     
-    // ✅ 今日の未完了
+    // 今日の未完了
     var incompleteTodayTasks: [HWTask] {
         tasks.filter { task in
             if isRepeatActiveToday(task) {
@@ -198,9 +219,9 @@ final class TaskViewModel: ObservableObject {
         }
     }
     
-    // ✅ 今日の完了（繰り返しは “今日分を完了したもの” だけ）
+    // 今日の完了（繰り返しは “今日分を完了したもの” だけ）
     var completedTodayTasks: [HWTask] {
-        // ✅ 今日完了したタスクは表示（繰り返し/単発どちらも）
+        // 今日完了したタスクは表示（繰り返し/単発どちらも）
         tasks.filter { isCompletedToday($0) }
     }
 
